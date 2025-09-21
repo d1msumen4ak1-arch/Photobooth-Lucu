@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Photobooth Lucu — HTML+CSS</title>
+  <style>
+    :root{
+      --accent: #ff7ab6;
+      --bg: #fff7fb;
+      --card: #ffffff;
+      --muted: #666;
+      --radius: 14px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;background:linear-gradient(180deg,var(--bg),#fff);padding:28px;}
+    .container{max-width:1100px;margin:0 auto}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:22px;color:var(--accent);margin:0}
+    .controls{display:flex;gap:10px;align-items:center}
+    .btn{background:var(--accent);color:#fff;padding:8px 12px;border-radius:10px;border:0;cursor:pointer}
+    .secondary{background:transparent;border:1px solid #ddd;color:#333;padding:8px 10px;border-radius:10px}
+
+    .grid{display:grid;grid-template-columns:2fr 1fr;gap:18px}
+    .card{background:var(--card);padding:14px;border-radius:var(--radius);box-shadow:0 6px 18px rgba(20,20,30,0.06)}
+
+    /* preview box - responsive ratio container */
+    .preview-wrap{position:relative;padding-top:56.25%;overflow:hidden;border-radius:12px;background:#000}
+    video#cam{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    .sticker{position:absolute;touch-action:none;user-select:none}
+
+    .toolbar{display:flex;gap:8px;margin-top:12px}
+
+    .stickers-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .stick-btn{border:1px dashed #eee;padding:6px;border-radius:8px;background:#fafafa;cursor:pointer}
+    .stick-btn img{width:100%;height:68px;object-fit:contain}
+
+    canvas{width:100%;display:block;margin-top:12px;border-radius:8px}
+
+    aside .section{margin-bottom:12px}
+    label.small{font-size:13px;color:var(--muted)}
+
+    footer{text-align:center;color:#888;margin-top:18px;font-size:13px}
+
+    /* small responsive */
+    @media (max-width:880px){.grid{grid-template-columns:1fr}.preview-wrap{padding-top:75%}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Photobooth Lucu</h1>
+      <div class="controls">
+        <label class="small">Tema warna <input id="color" type="color" value="#ff7ab6" style="margin-left:8px;border:0;padding:0;width:40px;height:32px"/></label>
+        <button id="capture" class="btn">Ambil Foto</button>
+        <button id="download" class="secondary">Download</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <main>
+        <div class="card">
+          <div id="previewArea" class="preview-wrap">
+            <video id="cam" autoplay playsinline muted></video>
+            <!-- stickers will be appended here as img.sticker -->
+          </div>
+
+          <div class="toolbar">
+            <button id="reset" class="secondary">Reset</button>
+            <button id="qrBtn" class="secondary">Buat QR</button>
+            <div id="qrHolder"></div>
+          </div>
+
+          <canvas id="outCanvas" width="800" height="450" style="display:none"></canvas>
+        </div>
+      </main>
+
+      <aside>
+        <div class="card">
+          <div class="section">
+            <div class="small">Pilih stiker</div>
+            <div id="stickers" class="stickers-grid" style="margin-top:8px">
+              <!-- sample stickers -->
+              <button class="stick-btn" data-src="https://i.imgur.com/4AiXzf8.png"><img src="https://i.imgur.com/4AiXzf8.png" alt="kacamata"><div style="font-size:12px;margin-top:6px">Kacamata</div></button>
+              <button class="stick-btn" data-src="https://i.imgur.com/2yaf2wb.png"><img src="https://i.imgur.com/2yaf2wb.png" alt="topi"><div style="font-size:12px;margin-top:6px">Topi</div></button>
+              <button class="stick-btn" data-src="https://i.imgur.com/DKc7k6q.png"><img src="https://i.imgur.com/DKc7k6q.png" alt="hati"><div style="font-size:12px;margin-top:6px">Hati</div></button>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="small">Upload stiker (png/transparent)</div>
+            <input id="uploadSticker" type="file" accept="image/*" />
+          </div>
+
+          <div class="section">
+            <div class="small">Stiker terpasang</div>
+            <ul id="placedList" style="list-style:none;padding:0;margin:8px 0 0 0"></ul>
+          </div>
+
+          <div class="section">
+            <div class="small">Petunjuk</div>
+            <ol style="padding-left:18px;margin:8px 0 0 0;font-size:13px;color:#444">
+              <li>Pilih tema warna di kiri atas.</li>
+              <li>Tambahkan stiker, lalu seret posisi di area preview.</li>
+              <li>Tekan "Ambil Foto" untuk menangkap, lalu download atau buat QR.</li>
+            </ol>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <footer>Disarankan buka file ini lewat Live Server (VSCode) untuk akses kamera (https required).</footer>
+  </div>
+
+  <!-- QRCode library (cdn) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <script>
+    // Elements
+    const cam = document.getElementById('cam');
+    const previewArea = document.getElementById('previewArea');
+    const captureBtn = document.getElementById('capture');
+    const downloadBtn = document.getElementById('download');
+    const resetBtn = document.getElementById('reset');
+    const colorInput = document.getElementById('color');
+    const stickersGrid = document.getElementById('stickers');
+    const uploadSticker = document.getElementById('uploadSticker');
+    const outCanvas = document.getElementById('outCanvas');
+    const placedList = document.getElementById('placedList');
+    const qrBtn = document.getElementById('qrBtn');
+    const qrHolder = document.getElementById('qrHolder');
+
+    // state
+    const placed = []; // {id, el (img), xPct, yPct, wPct, hPct, src}
+    let dragging = null;
+
+    // set theme color
+    colorInput.addEventListener('input', e => {
+      document.documentElement.style.setProperty('--accent', e.target.value);
+    });
+
+    // start camera
+    async function startCam(){
+      try{
+        const s = await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}});
+        cam.srcObject = s;
+        await cam.play();
+      }catch(e){
+        alert('Tidak bisa mengakses kamera. Pastikan menggunakan HTTPS / Live Server dan beri izin.');
+        console.error(e);
+      }
+    }
+    startCam();
+
+    // helper to create sticker element and add to preview
+    function addSticker(src){
+      const img = document.createElement('img');
+      img.src = src;
+      img.className = 'sticker';
+      img.style.width = '26%';
+      img.style.left = '50%';
+      img.style.top = '30%';
+      img.style.transform = 'translate(-50%,-50%)';
+      img.draggable = false;
+      previewArea.appendChild(img);
+
+      const id = Date.now() + Math.random();
+      const item = {id, el: img, xPct:0.37, yPct:0.3, wPct:0.26, hPct:null, src};
+      placed.push(item);
+      refreshPlacedList();
+
+      // pointer events for drag
+      img.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        img.setPointerCapture(ev.pointerId);
+        dragging = {id, startX:ev.clientX, startY:ev.clientY};
+      });
+      window.addEventListener('pointermove', (ev)=>{
+        if(!dragging || dragging.id !== id) return;
+        const rect = previewArea.getBoundingClientRect();
+        const dx = (ev.clientX - dragging.startX);
+        const dy = (ev.clientY - dragging.startY);
+        dragging.startX = ev.clientX; dragging.startY = ev.clientY;
+        // compute new position in px then convert to percent
+        const curLeft = parseFloat(img.style.left) / 100 * rect.width;
+        const curTop = parseFloat(img.style.top) / 100 * rect.height;
+        const newLeft = curLeft + dx; const newTop = curTop + dy;
+        const xPct = Math.min(95, Math.max(5, newLeft / rect.width * 100));
+        const yPct = Math.min(95, Math.max(5, newTop / rect.height * 100));
+        img.style.left = xPct + '%'; img.style.top = yPct + '%';
+        // update placed
+        const p = placed.find(z=>z.id===id);
+        if(p){p.xPct = xPct/100; p.yPct = yPct/100}
+        refreshPlacedList();
+      });
+      window.addEventListener('pointerup', ()=>{ if(dragging && dragging.id===id) dragging=null; });
+
+      // set size once image loaded
+      img.addEventListener('load', ()=>{
+        const rect = previewArea.getBoundingClientRect();
+        const w = img.naturalWidth; const h = img.naturalHeight;
+        const ratio = h/w;
+        const widthPct = parseFloat(img.style.width);
+        const heightPx = rect.width * (widthPct/100) * ratio;
+        img.style.height = (heightPx / rect.height * 100) + '%';
+        const p = placed.find(z=>z.id===id); if(p) p.hPct = (heightPx / rect.height);
+      });
+    }
+
+    // click existing sample sticker
+    stickersGrid.addEventListener('click', (ev)=>{
+      const btn = ev.target.closest('.stick-btn'); if(!btn) return;
+      const src = btn.getAttribute('data-src'); addSticker(src);
+    });
+
+    // upload sticker
+    uploadSticker.addEventListener('change', (ev)=>{
+      const f = ev.target.files && ev.target.files[0]; if(!f) return;
+      const url = URL.createObjectURL(f); addSticker(url);
+      // clear input
+      uploadSticker.value = '';
+    });
+
+    function refreshPlacedList(){
+      placedList.innerHTML = '';
+      placed.forEach(p=>{
+        const li = document.createElement('li');
+        li.style.display='flex'; li.style.justifyContent='space-between'; li.style.alignItems='center'; li.style.marginBottom='8px';
+        li.innerHTML = `<div style="display:flex;gap:8px;align-items:center"><img src="${p.src}" style="width:48px;height:48px;object-fit:contain;border-radius:6px"/><div style='font-size:13px'>x:${Math.round(p.xPct*100)}% y:${Math.round(p.yPct*100)}%</div></div>`;
+        const btns = document.createElement('div');
+        const del = document.createElement('button'); del.textContent='Hapus'; del.className='secondary'; del.style.padding='6px 8px'; del.onclick = ()=>{removePlaced(p.id)};
+        btns.appendChild(del); li.appendChild(btns);
+        placedList.appendChild(li);
+      });
+    }
+    function removePlaced(id){
+      const idx = placed.findIndex(p=>p.id===id); if(idx===-1) return;
+      const p = placed[idx]; p.el.remove(); placed.splice(idx,1); refreshPlacedList();
+    }
+
+    // capture: draw video frame + stickers onto canvas then show download link
+    captureBtn.addEventListener('click', async ()=>{
+      const rect = previewArea.getBoundingClientRect();
+      // choose canvas size based on video resolution
+      const vw = cam.videoWidth || 1280; const vh = cam.videoHeight || 720;
+      outCanvas.width = vw; outCanvas.height = Math.round(vh);
+      const ctx = outCanvas.getContext('2d');
+      // draw video frame
+      ctx.drawImage(cam, 0, 0, outCanvas.width, outCanvas.height);
+      // draw each sticker by loading image and drawing at proper positions
+      for(const p of placed){
+        await drawStickerOnCanvas(ctx, p, rect, outCanvas);
+      }
+      // show canvas as image in a new window or enable download
+      outCanvas.style.display = 'block';
+      // enable download link
+      const dataUrl = outCanvas.toDataURL('image/png');
+      downloadBtn.onclick = ()=>downloadDataUrl(dataUrl);
+      // also show a small preview in page by opening in a new tab
+      window.open(dataUrl, '_blank');
+    });
+
+    async function drawStickerOnCanvas(ctx, p, previewRect, canvas){
+      return new Promise((res)=>{
+        const img = new Image(); img.crossOrigin = 'anonymous'; img.src = p.src;
+        img.onload = ()=>{
+          // compute position: convert p.xPct/p.yPct relative to previewRect to canvas pixels
+          const px = p.xPct * canvas.width; const py = p.yPct * canvas.height;
+          // compute size: use element width percent of previewRect -> compute same fraction on canvas
+          // estimate width from element style (we stored wPct/hPct)
+          const w = (p.wPct || 0.26) * canvas.width; // fallback
+          // if hPct available, compute height, else maintain aspect ratio
+          let h;
+          if(p.hPct) h = p.hPct * canvas.height; else h = w * (img.naturalHeight / img.naturalWidth);
+          // the sticker's styles used translate(-50%,-50%) so center it
+          ctx.drawImage(img, px - w/2, py - h/2, w, h);
+          res();
+        };
+        img.onerror = ()=>{console.warn('gagal load sticker', p.src); res();};
+      });
+    }
+
+    function downloadDataUrl(dataUrl){
+      const a = document.createElement('a'); a.href = dataUrl; a.download = `photobooth-${Date.now()}.png`; a.click();
+    }
+
+    // reset
+    resetBtn.addEventListener('click', ()=>{
+      // remove sticker elements
+      placed.slice().forEach(p=>{ p.el.remove(); }); placed.length = 0; refreshPlacedList(); qrHolder.innerHTML=''; outCanvas.style.display='none';
+    });
+
+    // generate QR from current canvas image
+    qrBtn.addEventListener('click', ()=>{
+      if(outCanvas.style.display === 'none'){
+        alert('Silakan "Ambil Foto" terlebih dahulu untuk membuat QR dari hasil foto.'); return;
+      }
+      const dataUrl = outCanvas.toDataURL('image/png');
+      qrHolder.innerHTML = '';
+      const qEl = document.createElement('div'); qrHolder.appendChild(qEl);
+      // use QRCode library
+      try{
+        new QRCode(qEl, {
+          text: dataUrl,
+          width: 160,
+          height: 160,
+          correctLevel: QRCode.CorrectLevel.L
+n        });
+      }catch(e){
+        qrHolder.textContent = 'Gagal membuat QR — gambar terlalu besar untuk dimasukkan kedalam QR. Sebaiknya upload ke server dan buat QR ke linknya.';
+      }
+    });
+
+    // download button default handler (if used without capture)
+    downloadBtn.addEventListener('click', ()=>{
+      if(outCanvas.style.display === 'none'){
+        alert('Silakan ambil foto dulu (Ambil Foto), atau klik Ambil Foto untuk langsung membuka hasil di tab baru.');
+      }
+    });
+
+    // simple cleanup when leaving
+    window.addEventListener('beforeunload', ()=>{
+      const tracks = cam?.srcObject?.getTracks?.(); tracks?.forEach(t=>t.stop());
+    });
+  </script>
+</body>
+</html>
